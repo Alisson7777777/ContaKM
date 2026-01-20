@@ -43,9 +43,10 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [isRecovering, setIsRecovering] = useState(false);
   
-  // Ref para evitar salvamento antes de carregar
-  const isDataLoaded = useRef(false);
+  // Ref para evitar salvamento antes de carregar ou durante transições
+  const isDataReadyToSave = useRef(false);
 
   const [costs, setCosts] = useState<DriverCosts>(INITIAL_COSTS);
   const [history, setHistory] = useState<HistoryRecord[]>([]);
@@ -65,16 +66,22 @@ const App: React.FC = () => {
       else setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
+      
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsRecovering(true);
+      }
+
       if (session) {
-        isDataLoaded.current = false;
-        fetchUserData(session.user.id);
+        if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+          fetchUserData(session.user.id);
+        }
       } else {
         setCosts(INITIAL_COSTS);
         setHistory([]);
         setLoading(false);
-        isDataLoaded.current = false;
+        isDataReadyToSave.current = false;
       }
     });
 
@@ -83,28 +90,31 @@ const App: React.FC = () => {
 
   const fetchUserData = async (userId: string) => {
     setLoading(true);
+    isDataReadyToSave.current = false; // Bloqueia salvamento durante o fetch
     try {
       const { data, error } = await supabase
         .from('user_data')
         .select('*')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
-      if (error) {
-        if (error.code === 'PGRST116') {
-          console.log('Criando novo perfil de dados para o usuário.');
-          isDataLoaded.current = true;
-          return;
-        }
-        throw error;
-      }
+      if (error) throw error;
       
       if (data) {
         if (data.costs) setCosts(data.costs);
         if (data.history) setHistory(data.history);
         setLastSaved(new Date(data.updated_at));
+      } else {
+        // Se não existir, o upsert criará na primeira mudança, mas partimos do INITIAL
+        setCosts(INITIAL_COSTS);
+        setHistory([]);
       }
-      isDataLoaded.current = true;
+      
+      // Liberamos o salvamento apenas após o fetch bem sucedido
+      setTimeout(() => {
+        isDataReadyToSave.current = true;
+      }, 500);
+      
     } catch (err: any) {
       console.error('Erro ao carregar dados:', err.message || err);
     } finally {
@@ -112,10 +122,10 @@ const App: React.FC = () => {
     }
   };
 
-  // Salvamento Automático (Debounced)
+  // Salvamento Automático (Debounced) com Proteção de Dados
   useEffect(() => {
-    // Só salva se houver sessão, não estiver carregando E os dados já foram baixados do banco uma vez
-    if (!session || loading || !isDataLoaded.current) return;
+    // PROTEÇÃO: Só salva se houver sessão, não estiver carregando E os dados originais já foram carregados
+    if (!session || loading || !isDataReadyToSave.current || isRecovering) return;
 
     const saveTimeout = setTimeout(async () => {
       setSyncing(true);
@@ -127,19 +137,19 @@ const App: React.FC = () => {
             costs, 
             history,
             updated_at: new Date().toISOString()
-          }, { onConflict: 'user_id' });
+          });
 
         if (error) throw error;
         setLastSaved(new Date());
       } catch (err: any) {
-        console.error('Erro ao salvar no banco:', err.message || err);
+        console.error('Erro de sincronização:', err.message || err);
       } finally {
         setSyncing(false);
       }
-    }, 1500);
+    }, 2000);
 
     return () => clearTimeout(saveTimeout);
-  }, [costs, history, session, loading]);
+  }, [costs, history, session, loading, isRecovering]);
 
   useEffect(() => {
     localStorage.setItem(THEME_KEY, darkMode ? 'dark' : 'light');
@@ -148,6 +158,7 @@ const App: React.FC = () => {
   }, [darkMode]);
 
   const handleLogout = async () => {
+    isDataReadyToSave.current = false;
     await supabase.auth.signOut();
   };
 
@@ -155,7 +166,6 @@ const App: React.FC = () => {
     const activeCosts = costs;
     const km = activeCosts.monthlyMileage || 1;
     
-    // Soma os itens de manutenção se existirem, senão usa o valor manual
     const totalMaintenance = activeCosts.maintenanceItems && activeCosts.maintenanceItems.length > 0
       ? activeCosts.maintenanceItems.reduce((acc, item) => acc + item.value, 0)
       : activeCosts.maintenance;
@@ -268,12 +278,17 @@ const App: React.FC = () => {
     setHistory(prev => prev.filter(r => r.id !== id));
   };
 
+  // Se estiver recuperando senha, força o Auth a mostrar a tela de update_password
+  if (isRecovering) {
+    return <Auth onLogin={(user) => { setSession({ user }); setIsRecovering(false); }} />;
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-12 h-12 text-indigo-600 animate-spin mx-auto mb-4" />
-          <p className="text-slate-500 font-black uppercase tracking-widest text-xs">Acessando sua conta...</p>
+          <p className="text-slate-500 font-black uppercase tracking-widest text-xs">Protegendo seus dados...</p>
         </div>
       </div>
     );
@@ -287,7 +302,6 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300 pb-20 lg:pb-0">
       <header className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b dark:border-slate-800 sticky top-0 z-40 px-4 py-3 safe-top">
         <div className="max-w-7xl mx-auto grid grid-cols-3 items-center">
-          {/* Esquerda: Logo e Sync */}
           <div className="flex items-center gap-2">
             <div className="bg-indigo-600 p-1.5 sm:p-2 rounded-xl sm:rounded-2xl shadow-lg shadow-indigo-200 dark:shadow-none text-white shrink-0">
               <Calculator className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -301,14 +315,13 @@ const App: React.FC = () => {
                   </span>
                 ) : lastSaved ? (
                   <span className="flex items-center gap-1 text-[7px] font-black text-emerald-500 uppercase tracking-tighter">
-                    <CloudCheck size={8} /> Salvo
+                    <CloudCheck size={8} /> Protegido
                   </span>
                 ) : null}
               </div>
             </div>
           </div>
           
-          {/* Centro: Custo por KM (Visível em tudo) */}
           <div className="flex flex-col items-center justify-center">
             <div className="bg-slate-100 dark:bg-slate-800 px-3 sm:px-6 py-1 sm:py-2 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-700 shadow-inner flex flex-col items-center transition-all group hover:border-indigo-300 dark:hover:border-indigo-800">
                <span className="text-[7px] sm:text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none mb-0.5 sm:mb-1">Custo KM</span>
@@ -319,7 +332,6 @@ const App: React.FC = () => {
             </div>
           </div>
           
-          {/* Direita: Opções */}
           <div className="flex items-center justify-end gap-1 sm:gap-2">
              <div className="flex items-center gap-0.5 sm:gap-1 bg-white dark:bg-slate-800 p-1 rounded-xl sm:rounded-2xl border dark:border-slate-700 shadow-sm">
                 <button 

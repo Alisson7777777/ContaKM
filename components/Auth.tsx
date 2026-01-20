@@ -18,13 +18,23 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
-  // Detecta se o usuário veio de um link de recuperação de senha
+  // Detecta se o usuário veio de um link de recuperação de senha com verificação dupla
   useEffect(() => {
-    supabase.auth.onAuthStateChange(async (event) => {
+    // 1. Ouvinte de mudanças de estado
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
       if (event === 'PASSWORD_RECOVERY') {
         setMode('update_password');
+        setError('');
+        setMessage('');
       }
     });
+
+    // 2. Verificação imediata da URL (fallback de segurança)
+    if (window.location.hash && window.location.hash.includes('type=recovery')) {
+      setMode('update_password');
+    }
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -67,6 +77,8 @@ export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         setMessage('Senha atualizada com sucesso! Agora você já pode entrar.');
         setMode('login');
         setPassword('');
+        // Limpa a URL para evitar loops de recuperação
+        window.history.replaceState({}, document.title, window.location.pathname);
       }
     } catch (err: any) {
       setError(err.message || 'Ocorreu um erro na autenticação.');
