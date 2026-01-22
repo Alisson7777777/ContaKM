@@ -10,18 +10,19 @@ export interface DailyEntry {
   tollsSpent: number;
   otherSpent: number;
   otherSpentName: string;
-  // Novos campos de ganhos
   uberEarnings: number;
   pop99Earnings: number;
   inDriveEarnings: number;
   privateEarnings: number;
 }
 
-export interface MaintenanceItem {
+export interface CostItem {
   id: string;
   description: string;
   value: number;
 }
+
+export interface MaintenanceItem extends CostItem {}
 
 export interface DriverCosts {
   fuelPrice: number;
@@ -30,8 +31,10 @@ export interface DriverCosts {
   gnvPrice: number;
   gnvConsumption: number;
   monthlyMileage: number;
+  workHoursPerDay: number;
+  workDaysPerWeek: number;
   maintenance: number;
-  maintenanceItems?: MaintenanceItem[]; // Lista detalhada
+  maintenanceItems: MaintenanceItem[];
   insurance: number;
   annualIpva: number;
   annualLicensing: number;
@@ -45,6 +48,7 @@ export interface DriverCosts {
   appFees: number;
   others: number;
   othersName: string;
+  othersItems: CostItem[];
   targetProfitPerKm: number;
   dailyEntries: DailyEntry[]; 
 }
@@ -63,7 +67,10 @@ export interface CalculationResults {
   fuelCostPerKm: number;
   totalMonthlyCost: number;
   costPerKm: number;
+  costPerHour: number;
   suggestedMinFarePerKm: number;
+  suggestedMinFarePerHour: number;
+  breakEvenDaily: number;
   profitMarginPercentage: number;
   breakdown: CategoryBreakdown[];
 }

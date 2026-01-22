@@ -71,19 +71,19 @@ export const DailyLog: React.FC<Props> = ({ entries, onAdd, onUpdate, onDelete }
 
   const handleEdit = (entry: DailyEntry) => {
     setNewEntry({
-      date: entry.date.split('T')[0],
-      kmDriven: entry.kmDriven.toString(),
-      fuelSpent: entry.fuelSpent.toString(),
-      foodSpent: entry.foodSpent.toString(),
-      parkingSpent: entry.parkingSpent.toString(),
-      washSpent: (entry.washSpent || '0').toString(),
-      tollsSpent: (entry.tollsSpent || '0').toString(),
-      otherSpent: entry.otherSpent.toString(),
-      otherSpentName: entry.otherSpentName,
-      uberEarnings: entry.uberEarnings.toString(),
-      pop99Earnings: entry.pop99Earnings.toString(),
-      inDriveEarnings: entry.inDriveEarnings.toString(),
-      privateEarnings: entry.privateEarnings.toString(),
+      date: entry.date ? entry.date.split('T')[0] : getTodayString(),
+      kmDriven: (entry.kmDriven ?? 0).toString(),
+      fuelSpent: (entry.fuelSpent ?? 0).toString(),
+      foodSpent: (entry.foodSpent ?? 0).toString(),
+      parkingSpent: (entry.parkingSpent ?? 0).toString(),
+      washSpent: (entry.washSpent ?? 0).toString(),
+      tollsSpent: (entry.tollsSpent ?? 0).toString(),
+      otherSpent: (entry.otherSpent ?? 0).toString(),
+      otherSpentName: entry.otherSpentName || '',
+      uberEarnings: (entry.uberEarnings ?? 0).toString(),
+      pop99Earnings: (entry.pop99Earnings ?? 0).toString(),
+      inDriveEarnings: (entry.inDriveEarnings ?? 0).toString(),
+      privateEarnings: (entry.privateEarnings ?? 0).toString(),
     });
     setEditingId(entry.id);
     setShowForm(true);

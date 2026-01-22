@@ -2,7 +2,7 @@
 import React, { useState, useCallback } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { CalculationResults, DriverCosts } from '../types';
-import { Sparkles, Loader2, RefreshCw } from 'lucide-react';
+import { Loader2, RefreshCw, TrendingUp, Calculator, ShieldCheck } from 'lucide-react';
 
 interface Props {
   results: CalculationResults;
@@ -18,28 +18,26 @@ export const AIAssistant: React.FC<Props> = ({ results, costs }) => {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
-      const fuelContext = costs.isGnvEnabled 
-        ? `GNV habilitado: R$ ${costs.gnvPrice}/m³, Consumo: ${costs.gnvConsumption} KM/m³`
-        : `Combustível Líquido: R$ ${costs.fuelPrice}/L, Consumo: ${costs.consumption} KM/L`;
-
-      const ownershipContext = costs.isRented
-        ? `Veículo ALUGADO (Custo: R$ ${costs.rentalCost}/mês). Não possui depreciação ou impostos diretos.`
-        : `Veículo PRÓPRIO. Depreciação: R$ ${costs.depreciation}/mês, Impostos/Seguro: R$ ${(costs.insurance + (costs.annualIpva + costs.annualLicensing)/12).toFixed(2)}/mês.`;
-
       const prompt = `
-        Aja como um consultor financeiro especialista para motoristas de aplicativo (Uber, 99).
-        Dados atuais do motorista:
-        - Situação: ${ownershipContext}
-        - Custo Real por KM: R$ ${results.costPerKm.toFixed(2)}
-        - Informação de Combustível: ${fuelContext}
-        - KM Mensal Rodada: ${costs.monthlyMileage} KM
-        - Manutenção: R$ ${costs.maintenance}/mês
-        - Gastos Totais com Combustível: R$ ${results.fuelCostMonthly.toFixed(2)}/mês
+        Realize uma AUDITORIA CONTÁBIL ESTRATÉGICA com base nos seguintes dados operacionais:
         
-        Com base nesses números, dê 3 dicas práticas, curtas e diretas em português para este motorista reduzir seus custos ou melhorar sua rentabilidade. 
-        Leve em conta se o motorista usa GNV e se o carro é alugado (para alugados, foque em otimização de KM vs plano da locadora).
-        Seja didático e use uma linguagem simples de "motorista para motorista".
-        Não use introduções longas. Vá direto aos pontos em formato de lista.
+        MÉTRICAS:
+        - Custo por KM: R$ ${results.costPerKm.toFixed(2)}
+        - Custo por Hora: R$ ${results.costPerHour.toFixed(2)}
+        - Tarifa Mínima Sugerida (Lucro): R$ ${results.suggestedMinFarePerKm.toFixed(2)}/KM
+        - Meta de Lucro Mensal: R$ ${(costs.monthlyMileage * costs.targetProfitPerKm).toFixed(2)}
+        - Ponto de Equilíbrio Diário (Sair do zero): R$ ${results.breakEvenDaily.toFixed(2)}
+        - Combustível: ${costs.isGnvEnabled ? 'GNV' : 'Gasolina/Etanol'}
+        
+        ESTRUTURA DA RESPOSTA (Seja direto e numérico):
+        1. DIAGNÓSTICO DE VIABILIDADE: Avalie se a meta de lucro de R$ ${costs.targetProfitPerKm.toFixed(2)}/KM é sustentável perante o custo operacional.
+        2. ANÁLISE DE TEMPO: Avalie o faturamento por hora necessário vs jornada de ${costs.workHoursPerDay}h.
+        3. OTIMIZAÇÃO: Cite 2 pontos de maior peso nos custos fixos ou variáveis que podem ser otimizados.
+        
+        REGRAS: 
+        - Resposta curta e estritamente profissional.
+        - Foco em contabilidade de transporte.
+        - Não dê conselhos de direção ou aplicativos específicos.
       `;
 
       const response = await ai.models.generateContent({
@@ -47,61 +45,57 @@ export const AIAssistant: React.FC<Props> = ({ results, costs }) => {
         contents: prompt,
       });
 
-      setAdvice(response.text || "Não foi possível gerar dicas no momento.");
+      setAdvice(response.text || "Não foi possível processar a auditoria contábil.");
     } catch (error) {
       console.error(error);
-      setAdvice("Ops! Ocorreu um erro ao buscar dicas. Tente novamente.");
+      setAdvice("Falha técnica na conexão com o auditor de IA.");
     } finally {
       setLoading(false);
     }
   }, [results, costs]);
 
   return (
-    <div className="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-[2rem] p-6 text-white shadow-xl shadow-indigo-100 dark:shadow-none overflow-hidden relative">
-      <div className="absolute top-0 right-0 p-8 opacity-10">
-         <Sparkles className="w-24 h-24" />
-      </div>
+    <div className="bg-white dark:bg-slate-900 rounded-[3rem] border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden relative group">
+      <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none group-hover:scale-110 transition-transform"><ShieldCheck size={140} className="text-indigo-600" /></div>
       
-      <div className="relative z-10">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-indigo-200" />
-            Consultoria IA
-          </h3>
-          {advice && (
-            <button 
-              onClick={getAdvice} 
-              disabled={loading}
-              className="p-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
-              title="Gerar novas dicas"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-          )}
+      <div className="p-8 md:p-10">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h3 className="text-xl font-black text-slate-800 dark:text-white flex items-center gap-2 italic">
+              <ShieldCheck className="w-6 h-6 text-indigo-500" />
+              Auditoria de Rentabilidade
+            </h3>
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Análise Contábil by Gemini Intelligence</p>
+          </div>
+          <button 
+            onClick={getAdvice} 
+            disabled={loading}
+            className={`p-3 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 transition-all active:scale-90 ${loading ? 'opacity-50' : 'hover:bg-indigo-600 hover:text-white'}`}
+          >
+            <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+          </button>
         </div>
 
         {!advice && !loading && (
-          <div className="text-center py-4">
-            <p className="text-indigo-100 mb-6 text-sm">Clique abaixo para receber uma análise personalizada dos seus custos baseada em IA.</p>
-            <button
-              onClick={getAdvice}
-              className="bg-white text-indigo-600 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-50 transition-all shadow-lg active:scale-95"
-            >
-              Analisar meu lucro
+          <div className="bg-slate-50 dark:bg-slate-800/40 p-8 rounded-[2.5rem] border-2 border-dashed border-slate-200 dark:border-slate-700 text-center">
+            <TrendingUp className="mx-auto text-slate-300 dark:text-slate-600 mb-4" size={48} />
+            <p className="text-xs text-slate-500 font-bold uppercase tracking-tight mb-6">Sua operação é matematicamente viável?</p>
+            <button onClick={getAdvice} className="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-2xl hover:bg-indigo-700 transition-all">
+              Iniciar Auditoria Técnica
             </button>
           </div>
         )}
 
         {loading && (
-          <div className="flex flex-col items-center justify-center py-8">
-            <Loader2 className="w-8 h-8 animate-spin text-indigo-200 mb-3" />
-            <p className="text-xs text-indigo-100 font-bold uppercase tracking-tighter">Consultando o especialista...</p>
+          <div className="py-16 flex flex-col items-center justify-center">
+            <Loader2 className="w-12 h-12 text-indigo-600 animate-spin mb-4" />
+            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Calculando riscos e margens...</p>
           </div>
         )}
 
         {advice && !loading && (
-          <div className="space-y-4 animate-in fade-in duration-500">
-            <div className="bg-white/10 p-5 rounded-2xl backdrop-blur-md text-sm leading-relaxed whitespace-pre-wrap border border-white/10 font-medium">
+          <div className="space-y-4 animate-in fade-in zoom-in-95 duration-500">
+            <div className="text-xs sm:text-sm leading-relaxed text-slate-600 dark:text-slate-300 whitespace-pre-wrap font-medium bg-slate-50 dark:bg-slate-950/30 p-8 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-inner">
               {advice}
             </div>
           </div>
